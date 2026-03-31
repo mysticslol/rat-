@@ -6,7 +6,7 @@ registre_clients = [] #
 mutex = threading.Lock()
 
 def configurer_point_ecoute():
-    """Prépare le socket SSL pour les agents entrants"""
+    # Setup du contexte SSL avec les certifs
     cert_ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
     cert_ctx.load_cert_chain(certfile='cert.pem', keyfile='key.pem') #
     sock_ecoute = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -16,7 +16,7 @@ def configurer_point_ecoute():
     return cert_ctx.wrap_socket(sock_ecoute, server_side=True)
 
 def gestion_entrees_reseau(s_maitre):
-    """Thread gérant l'arrivée des nouveaux clients"""
+   # Boucle pour accepter les clients un par un
     num_ordre = 1
     while True:
         c_sock, c_addr = s_maitre.accept()
@@ -26,12 +26,14 @@ def gestion_entrees_reseau(s_maitre):
 
 @app.route('/')
 def vue_globale():
+    # Affiche la liste des machines connectées
     with mutex:
         info_noeuds = [{"id": r["id"], "addr": f"{r['addr'][0]}"} for r in registre_clients]
     return render_template('index.html', clients=info_noeuds) #
 
 @app.route('/client/<int:client_id>', methods=['GET', 'POST'])
 def console_pilotage(client_id):
+    # Page pour envoyer des commandes à un client précis
     with mutex:
         cible = next((r for r in registre_clients if r['id'] == client_id), None)
     if not cible: return "Non repertorie", 404
